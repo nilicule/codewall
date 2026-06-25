@@ -1,0 +1,71 @@
+{
+  "rateLimit": {"remaining": 4987, "cost": 1, "resetAt": "2026-06-24T13:00:00Z"},
+  "organization": {
+    "repositories": {
+      "pageInfo": {"hasNextPage": false, "endCursor": "Y3Vyc29y"},
+      "nodes": [
+        {
+          "name": "energyai-core",
+          "defaultBranchRef": {
+            "target": {
+              "history": {
+                "nodes": [
+                  {
+                    "oid": "aaa111",
+                    "committedDate": "2026-06-24T10:00:00Z",
+                    "messageHeadline": "fix rate-limit backoff on graphql sync",
+                    "author": {"user": {"login": "remco", "name": "Remco", "avatarUrl": "https://x/remco.png"}, "name": "Remco"}
+                  },
+                  {
+                    "oid": "aaa222",
+                    "committedDate": "2026-06-23T09:00:00Z",
+                    "messageHeadline": "add incremental cursor cache",
+                    "author": {"user": {"login": "bert", "name": "Bert", "avatarUrl": "https://x/bert.png"}, "name": "Bert"}
+                  }
+                ]
+              }
+            }
+          },
+          "pullRequests": {
+            "nodes": [
+              {
+                "number": 42,
+                "title": "Streaming consumer for AMI datalink",
+                "state": "MERGED",
+                "createdAt": "2026-06-20T08:00:00Z",
+                "mergedAt": "2026-06-22T08:00:00Z",
+                "author": {"login": "remco", "name": "Remco", "avatarUrl": "https://x/remco.png"}
+              },
+              {
+                "number": 43,
+                "title": "Harden Cognito edge auth",
+                "state": "OPEN",
+                "createdAt": "2026-06-24T07:00:00Z",
+                "mergedAt": null,
+                "author": {"login": "anna", "name": "Anna", "avatarUrl": "https://x/anna.png"}
+              }
+            ]
+          }
+        },
+        {
+          "name": "p1-dongle-fw",
+          "defaultBranchRef": {
+            "target": {
+              "history": {
+                "nodes": [
+                  {
+                    "oid": "bbb111",
+                    "committedDate": "2026-06-24T11:30:00Z",
+                    "messageHeadline": "tune fargate autoscaling thresholds",
+                    "author": {"user": {"login": "remco", "name": "Remco", "avatarUrl": "https://x/remco.png"}, "name": "Remco"}
+                  }
+                ]
+              }
+            }
+          },
+          "pullRequests": {"nodes": []}
+        }
+      ]
+    }
+  }
+}

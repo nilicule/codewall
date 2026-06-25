@@ -1,0 +1,11 @@
+.venv
+.git
+.idea
+__pycache__
+*.pyc
+.pytest_cache
+tests
+_old/dashboard.html
+.env
+*.sqlite
+*.db

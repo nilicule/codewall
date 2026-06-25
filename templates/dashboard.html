@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NET2GRID · Activity</title>
+<style>
+  /* ---- Design tokens ----
+     Palette grounded in NET2GRID's world: energy/grid telemetry on a dark ops wall.
+       --void    deep grid-night background
+       --panel   raised surface
+       --hairline faint structural lines (the "grid")
+       --ember   commits  (warm signal, the dominant pulse)
+       --flux    PR opened (cyan, "in flight")
+       --fused   PR merged (violet, "landed")
+       --ink/--mute text
+  */
+  :root{
+    --void:#070b12;
+    --void2:#0a1018;
+    --panel:#0d141e;
+    --panel2:#101a26;
+    --hairline:#1b2735;
+    --hairline2:#243446;
+    --ember:#ff8a3d;
+    --flux:#36d6e7;
+    --fused:#a98bff;
+    --grid-green:#3ddc84;
+    --ink:#eaf2ff;
+    --mute:#5d7088;
+    --mute2:#3d4d61;
+    --font-display:"Space Grotesk","Segoe UI",system-ui,sans-serif;
+    --font-body:"Inter",system-ui,sans-serif;
+    --font-mono:"JetBrains Mono","SF Mono",ui-monospace,monospace;
+  }
+
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--void);
+    color:var(--ink);
+    font-family:var(--font-body);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* faint telemetry grid behind everything */
+  body::before{
+    content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-image:
+      linear-gradient(var(--hairline) 1px,transparent 1px),
+      linear-gradient(90deg,var(--hairline) 1px,transparent 1px);
+    background-size:64px 64px;
+    opacity:.18;
+    mask-image:radial-gradient(ellipse 90% 80% at 50% 40%,#000 30%,transparent 90%);
+  }
+
+  .wall{
+    position:relative;z-index:1;
+    height:100vh;width:100vw;
+    display:grid;
+    grid-template-columns:300px 1fr 340px;
+    grid-template-rows:1fr 188px;
+    grid-template-areas:
+      "left  hero   stream"
+      "left  bottom stream";
+    gap:14px;padding:16px;
+  }
+
+  .panel{
+    background:linear-gradient(180deg,var(--panel) 0%,var(--void2) 100%);
+    border:1px solid var(--hairline);
+    border-radius:10px;
+    position:relative;
+    overflow:hidden;
+  }
+  .panel-pad{padding:18px 20px}
+
+  .eyebrow{
+    font-family:var(--font-mono);
+    font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--mute);font-weight:500;
+  }
+  .panel-title{
+    font-family:var(--font-display);
+    font-size:13px;font-weight:600;letter-spacing:.04em;
+    color:var(--ink);text-transform:uppercase;
+  }
+
+  /* ============ LEFT COLUMN ============ */
+  .left{grid-area:left;display:flex;flex-direction:column;gap:14px}
+
+  .stat{flex:0 0 auto}
+  .stat .num{
+    font-family:var(--font-display);
+    font-weight:600;line-height:.95;letter-spacing:-.02em;
+    font-size:54px;color:var(--ink);
+    font-variant-numeric:tabular-nums;
+    margin-top:6px;
+  }
+  .stat .num.small{font-size:40px}
+  .stat .sub{font-family:var(--font-mono);font-size:10px;color:var(--mute);letter-spacing:.06em;margin-top:8px}
+
+  /* ORG PULSE: an ECG-style heartbeat that beats with the live stream */
+  .pulse-panel{flex:0 0 auto;display:flex;flex-direction:column;overflow:hidden}
+  .pulse-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 4px}
+  .pulse-panel canvas{display:block;width:100%;height:120px}
+  .pulse-caption{
+    font-family:var(--font-mono);font-size:9px;color:var(--mute);
+    letter-spacing:0;padding:8px 13px 15px;
+    white-space:nowrap;overflow:hidden;text-overflow:clip;
+  }
+  .pulse-caption b{color:var(--ink);font-weight:600}
+  .pulse-caption .sep{color:var(--mute2);margin:0 3px}
+  .stat .num .unit{font-size:.45em;color:var(--mute);font-weight:500;margin-left:6px;letter-spacing:0}
+
+  .stat-row{display:flex;gap:14px}
+  .stat-row .stat{flex:1}
+
+  .people{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+  .people-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+  .people-count{font-family:var(--font-display);font-size:22px;font-weight:600;color:var(--ink);line-height:1}
+  .people-count .of{color:var(--mute);font-size:13px;font-weight:500}
+  .people-sub{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.06em;color:var(--mute);margin-bottom:14px}
+
+  /* live-sorted roster: active contributors rise to the top */
+  .roster{position:relative;flex:1;overflow:hidden;mask-image:linear-gradient(180deg,#000 calc(100% - 28px),transparent 100%)}
+  .person{
+    position:absolute;left:0;right:0;height:38px;
+    display:flex;align-items:center;gap:11px;padding:0 2px 0 6px;
+    transition:transform .6s cubic-bezier(.22,.85,.25,1),opacity .6s;
+    will-change:transform;
+  }
+  .person .pic{
+    flex:0 0 auto;width:26px;height:26px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--font-display);font-size:10.5px;font-weight:600;
+    color:var(--void);position:relative;
+    transition:box-shadow .4s,transform .4s;
+  }
+  /* expanding ring drawn inside the avatar's own box (no outside bleed to clip) */
+  .person .pic .ping{
+    position:absolute;inset:0;border-radius:50%;
+    border:1.5px solid var(--ink);opacity:0;
+    transform-origin:center;pointer-events:none;
+  }
+  .person.flash .pic{transform:scale(1.1)}
+  .person.flash .pic .ping{animation:ping 1.2s ease-out}
+  @keyframes ping{0%{opacity:.7;transform:scale(.7)}100%{opacity:0;transform:scale(1.5)}}
+  .person .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+  .person .name{
+    font-family:var(--font-body);font-size:12px;font-weight:500;color:var(--ink);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1;
+  }
+  .person .focus{
+    display:flex;align-items:center;gap:5px;line-height:1;
+    white-space:nowrap;overflow:hidden;
+  }
+  .person .verb{font-family:var(--font-mono);font-size:9.5px;color:var(--mute);flex:0 0 auto}
+  .person .repo-chip{
+    font-family:var(--font-mono);font-size:10px;font-weight:500;
+    padding:2px 7px;border-radius:5px;
+    color:var(--ink);background:var(--panel2);
+    border:1px solid var(--hairline2);
+    overflow:hidden;text-overflow:ellipsis;
+    transition:background .4s,border-color .4s,color .4s;
+  }
+  /* chip tinted by event kind so you see *what* they're doing, not just where */
+  .person .repo-chip.k-commit{color:var(--ember);border-color:color-mix(in srgb,var(--ember) 45%,transparent);background:color-mix(in srgb,var(--ember) 12%,var(--panel2))}
+  .person .repo-chip.k-opened{color:var(--flux);border-color:color-mix(in srgb,var(--flux) 45%,transparent);background:color-mix(in srgb,var(--flux) 12%,var(--panel2))}
+  .person .repo-chip.k-merged{color:var(--fused);border-color:color-mix(in srgb,var(--fused) 45%,transparent);background:color-mix(in srgb,var(--fused) 12%,var(--panel2))}
+  .person .when{
+    flex:0 0 auto;font-family:var(--font-mono);font-size:9.5px;color:var(--mute);
+    letter-spacing:.02em;min-width:30px;text-align:right;
+  }
+  .person.idle{opacity:.4}
+  .person.idle .name{color:var(--mute)}
+  .person.idle .pic{filter:saturate(.4) brightness(.7)}
+
+  /* ============ HERO ============ */
+  .hero{grid-area:hero;padding:0}
+  .hero canvas{display:block;width:100%;height:100%}
+  .hero-overlay{
+    position:absolute;top:18px;left:20px;z-index:3;pointer-events:none;
+  }
+  .hero-overlay h1{
+    font-family:var(--font-display);font-size:15px;font-weight:600;
+    letter-spacing:.05em;text-transform:uppercase;
+  }
+  .hero-legend{
+    position:absolute;bottom:16px;left:20px;z-index:3;
+    display:flex;gap:18px;font-family:var(--font-mono);font-size:10.5px;
+    color:var(--mute);letter-spacing:.05em;
+  }
+  .hero-legend span{display:flex;align-items:center;gap:6px}
+  .dot{width:8px;height:8px;border-radius:50%;box-shadow:0 0 8px currentColor}
+  .live-badge{
+    position:absolute;top:18px;right:20px;z-index:3;
+    display:flex;align-items:center;gap:7px;
+    font-family:var(--font-mono);font-size:10.5px;letter-spacing:.14em;color:var(--mute);
+  }
+  .live-badge .pip{width:7px;height:7px;border-radius:50%;background:var(--grid-green);box-shadow:0 0 10px var(--grid-green);animation:breathe 2s ease-in-out infinite}
+  @keyframes breathe{0%,100%{opacity:1}50%{opacity:.35}}
+
+  /* ============ BOTTOM STRIP ============ */
+  .bottom{grid-area:bottom;display:grid;grid-template-columns:1.1fr 1fr;gap:14px}
+  .heat-wrap{display:flex;flex-direction:column}
+  .heat{display:flex;gap:3px;margin-top:16px;flex:1;align-items:flex-end}
+  .heat-week{display:flex;flex-direction:column;gap:3px;flex:1}
+  .heat-cell{flex:1;border-radius:2px;background:var(--panel2);min-height:9px;position:relative}
+  /* ambient shimmer: every day breathes faintly, scaled by its real activity
+     (--glow), so busy past weeks glimmer while quiet ones stay dark */
+  .heat-cell::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+    background:var(--grid-green);opacity:0;
+    animation:shimmer var(--shimmer-dur,4s) ease-in-out var(--shimmer-delay,0s) infinite}
+  @keyframes shimmer{0%,100%{opacity:0}50%{opacity:calc(var(--glow,0)*0.2)}}
+  /* a real event lands on its day: the cell blooms, then settles back */
+  .heat-cell.hit{z-index:2;animation:cellhit 1.2s ease-out}
+  @keyframes cellhit{
+    0%{filter:brightness(2.3);box-shadow:0 0 10px 1px color-mix(in srgb,var(--grid-green) 70%,transparent)}
+    100%{filter:brightness(1);box-shadow:none}}
+  .heat-scale{display:flex;align-items:center;gap:6px;margin-top:12px;font-family:var(--font-mono);font-size:9.5px;color:var(--mute)}
+  .heat-scale .swatch{width:11px;height:11px;border-radius:2px}
+
+  .lang-wrap{display:flex;flex-direction:column}
+  .bars{display:flex;flex-direction:column;gap:11px;margin-top:18px;flex:1;justify-content:center}
+  .bar-row{display:flex;align-items:center;gap:12px;font-size:12px;transition:opacity .4s}
+  .bar-row .lbl{width:78px;font-family:var(--font-mono);font-size:10.5px;color:var(--mute);text-align:right;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar-track{flex:1;height:7px;background:var(--panel2);border-radius:4px;overflow:hidden;display:block}
+  .bar-fill{display:block;position:relative;overflow:hidden;height:100%;border-radius:4px;width:0%;
+    transition:width .7s cubic-bezier(.2,.7,.2,1),background .4s}
+  /* perpetual sheen so the panel is never dead, even when totals hold steady */
+  .bar-fill::after{content:"";position:absolute;top:0;bottom:0;left:0;width:42%;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.42),transparent);
+    filter:blur(1px);transform:translateX(-130%);
+    animation:sheen 3s linear infinite;animation-delay:var(--sheen-delay,0s)}
+  @keyframes sheen{0%{transform:translateX(-130%)}100%{transform:translateX(360%)}}
+  /* a real event on this repo flashes its bar */
+  .bar-fill.pulse{animation:barpulse .7s ease-out}
+  @keyframes barpulse{0%{filter:brightness(2) saturate(1.4)}100%{filter:brightness(1) saturate(1)}}
+  .bar-row .val{width:34px;font-family:var(--font-mono);font-size:10.5px;color:var(--mute);text-align:right;font-variant-numeric:tabular-nums}
+
+  /* ============ STREAM ============ */
+  .stream{grid-area:stream;display:flex;flex-direction:column}
+  .stream-head{display:flex;align-items:center;justify-content:space-between;padding:18px 20px 14px;border-bottom:1px solid var(--hairline)}
+  .stream-feed{flex:1;overflow:hidden;padding:6px 0;position:relative;mask-image:linear-gradient(180deg,transparent 0,#000 24px,#000 calc(100% - 36px),transparent 100%)}
+  .ev{
+    padding:9px 20px;font-family:var(--font-mono);font-size:11px;line-height:1.5;
+    animation:slidein .5s cubic-bezier(.2,.8,.2,1);
+  }
+  @keyframes slidein{from{opacity:0;transform:translateY(-8px)}}
+  .ev .ts{color:var(--mute2);font-size:10px}
+  .ev .who{color:var(--ink);font-weight:500}
+  .ev .repo{color:var(--mute)}
+  .ev .tag{font-weight:500}
+  .ev.commit .tag{color:var(--ember)}
+  .ev.opened .tag{color:var(--flux)}
+  .ev.merged .tag{color:var(--fused)}
+  .ev .msg{color:var(--mute);display:block;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  @media (max-width:1100px){
+    .wall{grid-template-columns:1fr;grid-template-rows:auto 52vh auto auto;
+      grid-template-areas:"left" "hero" "bottom" "stream"}
+    body{overflow:auto}
+    .stream{height:340px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation-duration:.001ms!important;animation-iteration-count:1!important}
+  }
+</style>
+</head>
+<body>
+<div class="wall">
+
+  <!-- LEFT -->
+  <aside class="left">
+    <div class="panel pulse-panel">
+      <div class="pulse-head">
+        <span class="eyebrow">Org pulse · live</span>
+        <span class="eyebrow" id="pulse-rate">— /min</span>
+      </div>
+      <canvas id="voicebox"></canvas>
+      <div class="pulse-caption" id="pulse-caption"></div>
+    </div>
+
+    <div class="panel panel-pad people">
+      <div class="people-head">
+        <div class="eyebrow">The floor</div>
+        <div class="people-count"><span id="s-people">0</span><span class="of"> / 41</span></div>
+      </div>
+      <div class="people-sub">people active · live</div>
+      <div class="roster" id="roster"></div>
+    </div>
+  </aside>
+
+  <!-- HERO -->
+  <section class="panel hero">
+    <div class="hero-overlay"><h1>Org activity</h1></div>
+    <div class="live-badge"><span class="pip"></span>LIVE · 90 DAY WINDOW</div>
+    <canvas id="constellation"></canvas>
+    <div class="hero-legend">
+      <span style="color:var(--ember)"><i class="dot" style="background:var(--ember)"></i>commit</span>
+      <span style="color:var(--flux)"><i class="dot" style="background:var(--flux)"></i>PR opened</span>
+      <span style="color:var(--fused)"><i class="dot" style="background:var(--fused)"></i>PR merged</span>
+    </div>
+  </section>
+
+  <!-- BOTTOM -->
+  <div class="bottom">
+    <div class="panel panel-pad heat-wrap">
+      <div class="eyebrow">Contribution density · 90 days</div>
+      <div class="heat" id="heat"></div>
+      <div class="heat-scale">
+        <span>less</span>
+        <i class="swatch" style="background:#16241c"></i>
+        <i class="swatch" style="background:#1f5238"></i>
+        <i class="swatch" style="background:#2f8a52"></i>
+        <i class="swatch" style="background:var(--grid-green)"></i>
+        <span>more</span>
+      </div>
+    </div>
+    <div class="panel panel-pad lang-wrap">
+      <div class="eyebrow">Where the work lands · top repos</div>
+      <div class="bars" id="bars"></div>
+    </div>
+  </div>
+
+  <!-- STREAM -->
+  <aside class="panel stream">
+    <div class="stream-head">
+      <div class="panel-title">Data stream</div>
+      <div class="eyebrow" id="stream-rate">— /min</div>
+    </div>
+    <div class="stream-feed" id="feed"></div>
+  </aside>
+
+</div>
+
+<script>
+/* ============================================================
+   LIVE DATA LAYER
+   Replaces the prototype's synthetic generator. Polls the Flask
+   /api/* endpoints, then drives the SAME render functions the mock
+   loop did: firePulse(dev,repo,color) beams, the floor roster,
+   the Data Stream feed, the "Where the work lands" bars, the
+   heatmap and the count-up stats. The animation/sorting/decay logic
+   stays exactly as in the prototype; only the data source changed.
+   ============================================================ */
+const PALETTE = {commit:"#ff8a3d",opened:"#36d6e7",merged:"#a98bff"};
+const KIND_VERB = {commit:"pushing to",opened:"opened PR in",merged:"merged into"};
+
+/* ---------- ORG PULSE: ECG heartbeat + totals caption ---------- */
+// The window totals live in a compact caption; the panel's hero is an ECG trace
+// that beats with the live stream (a spike per event, coloured by kind).
+function applyStats(s){
+  const cap=document.getElementById("pulse-caption");
+  if(!cap)return;
+  const n=v=>Number(v||0).toLocaleString();
+  cap.innerHTML=
+    `<span><b>${n(s.commits)}</b> commits</span><span class="sep">/</span>`+
+    `<span><b>${n(s.repos_active)}</b> repos</span><span class="sep">/</span>`+
+    `<span><b style="color:var(--flux)">${n(s.prs_open)}</b> open</span><span class="sep">/</span>`+
+    `<span><b style="color:var(--fused)">${n(s.prs_merged)}</b> merged</span>`;
+}
+
+// Audio-style "voicebox" (KITT): a row of segmented LED columns that grow
+// symmetrically from the centre line. Overall loudness tracks recent event
+// energy (each event injects a burst that decays); columns bounce on their own
+// phase; the lit colour eases toward the most recent event's kind.
+const vb=document.getElementById("voicebox");
+const vctx=vb.getContext("2d");
+let VW,VH,VDPR;
+const NB=30,SEG=7;                       // columns, LED segments per half
+const level=new Array(NB).fill(0);       // 0..1 current column heights
+const vphase=[],vspeed=[];
+for(let i=0;i<NB;i++){vphase[i]=Math.random()*6.2832;vspeed[i]=0.06+Math.random()*0.09;}
+let energy=0.15,_vt=0;
+let vColor=[94,240,160],vTarget=[94,240,160];   // eased lit colour (rgb)
+let _vbFrames=0,_vbBeats=0;
+function _hex2rgb(h){const n=parseInt(h.slice(1),16);return [n>>16&255,n>>8&255,n&255];}
+// centre columns reach higher (the KITT hump)
+function _env(i){return 0.5+0.5*Math.sin(Math.PI*i/(NB-1));}
+
+function vbResize(){
+  VDPR=Math.min(2,window.devicePixelRatio||1);
+  VW=vb.clientWidth||280;VH=vb.clientHeight||120;
+  vb.width=VW*VDPR;vb.height=VH*VDPR;vctx.setTransform(VDPR,0,0,VDPR,0,0);
+}
+vbResize();new ResizeObserver(vbResize).observe(vb);
+
+// fired by the event stream: pump the voicebox, tinted by the event kind
+function voicePulse(kind){
+  energy=Math.min(1,energy+0.5);
+  const c=PALETTE[kind];if(c)vTarget=_hex2rgb(c);
+  _vbBeats++;
+}
+
+function vbStep(){
+  _vt+=1;
+  energy*=0.9;if(energy<0.15)energy=0.15;          // decay to a quiet idle floor
+  for(let k=0;k<3;k++)vColor[k]+=(vTarget[k]-vColor[k])*0.07;
+  for(let i=0;i<NB;i++){
+    const osc=0.5+0.5*Math.sin(_vt*vspeed[i]+vphase[i]);
+    const target=energy*_env(i)*(0.35+0.65*osc);
+    level[i]+=(target-level[i])*0.4;
+  }
+}
+
+function vbDraw(){
+  vctx.clearRect(0,0,VW,VH);
+  const mid=VH*0.5,colW=VW/NB,bw=colW*0.5,gx=(colW-bw)/2;
+  const halfMax=VH*0.43,segH=halfMax/SEG,segGap=segH*0.32,segBody=Math.max(1.5,segH-segGap),r=Math.min(2,segBody/2);
+  const U=new Path2D(),L=new Path2D();
+  for(let i=0;i<NB;i++){
+    const x=i*colW+gx,lit=Math.round(level[i]*SEG);
+    for(let s=0;s<SEG;s++){
+      const yUp=mid-(s+1)*segH+segGap/2,yDn=mid+s*segH+segGap/2,p=(s<lit)?L:U;
+      p.roundRect(x,yUp,bw,segBody,r);
+      p.roundRect(x,yDn,bw,segBody,r);
+    }
+  }
+  // dim unlit LEDs
+  vctx.fillStyle="rgba(120,150,180,0.05)";vctx.fill(U);
+  // lit LEDs: vertical brightness falloff from the centre + a soft glow
+  const [cr,cg,cb]=vColor.map(v=>Math.round(v));
+  const grad=vctx.createLinearGradient(0,mid-halfMax,0,mid+halfMax);
+  grad.addColorStop(0,`rgba(${cr},${cg},${cb},0.5)`);
+  grad.addColorStop(0.5,`rgba(${cr},${cg},${cb},1)`);
+  grad.addColorStop(1,`rgba(${cr},${cg},${cb},0.5)`);
+  vctx.save();
+  vctx.shadowColor=`rgba(${cr},${cg},${cb},0.55)`;vctx.shadowBlur=8;
+  vctx.fillStyle=grad;vctx.fill(L);
+  vctx.restore();
+}
+
+function vbLoop(){_vbFrames++;vbStep();vbDraw();requestAnimationFrame(vbLoop);}
+vbLoop();
+
+/* ---------- the floor: who's working where (identity + focus) ---------- */
+const roster=document.getElementById("roster");
+const ROW_H=38;
+const VISIBLE=Math.max(5,Math.floor((roster.clientHeight||280)/ROW_H));
+const AV_HUES=[18,200,265,330,150,42,290,175];
+function hueFor(name){let h=0;for(const c of name)h=(h*31+c.charCodeAt(0))>>>0;return AV_HUES[h%AV_HUES.length];}
+function initials(name){return name.slice(0,2).toUpperCase();}
+
+const people=[];               // dynamic roster entries
+const pBy={};                  // login -> entry
+let _seq=0;
+
+function getPerson(login){
+  let p=pBy[login];
+  if(p)return p;
+  p={name:login, last:0, seq:0, repo:null, kind:null, el:null};
+  const el=document.createElement("div");el.className="person idle";
+  const hue=hueFor(login);
+  el.innerHTML=`
+    <div class="pic" style="background:radial-gradient(circle at 35% 30%,hsl(${hue} 85% 72%),hsl(${hue} 70% 50%))">
+      <span class="ping"></span>${initials(login)}
+    </div>
+    <div class="body">
+      <span class="name">${login}</span>
+      <span class="focus"><span class="verb"></span><span class="repo-chip"></span></span>
+    </div>
+    <span class="when"></span>`;
+  p.el=el;
+  p.verbEl=el.querySelector(".verb");
+  p.chipEl=el.querySelector(".repo-chip");
+  p.whenEl=el.querySelector(".when");
+  roster.appendChild(el);
+  people.push(p);pBy[login]=p;
+  return p;
+}
+
+function ago(ms){
+  const s=(Date.now()-ms)/1000;
+  if(s<60)return Math.max(1,s|0)+"s";
+  if(s<3600)return (s/60|0)+"m";
+  if(s<86400)return (s/3600|0)+"h";
+  return (s/86400|0)+"d";
+}
+
+function renderRoster(){
+  // most-recent contributors rise to the top; tiebreak on a monotonic seq so
+  // equal timestamps keep a STABLE order (prevents rows overlapping/churning)
+  const activeList=people
+    .filter(p=>p.last>0)
+    .sort((a,b)=> (b.last-a.last) || (b.seq-a.seq));
+  const visible=activeList.slice(0,VISIBLE);
+  const visibleSet=new Set(visible);
+
+  visible.forEach((p,slot)=>{
+    p.el.style.transform=`translateY(${slot*ROW_H}px)`;
+    p.el.style.opacity="1";
+    p.el.style.pointerEvents="";
+    p.el.classList.remove("idle");
+    if(p.repo){
+      p.verbEl.textContent=KIND_VERB[p.kind]+" ";
+      p.chipEl.textContent=p.repo;
+      p.chipEl.className="repo-chip k-"+p.kind;
+    }
+    p.whenEl.textContent=ago(p.last);
+  });
+
+  const parkY=(visible.length+1)*ROW_H;
+  people.forEach(p=>{
+    if(visibleSet.has(p))return;
+    p.el.style.opacity="0";
+    p.el.style.pointerEvents="none";
+    p.el.classList.add("idle");
+    p.el.style.transform=`translateY(${parkY}px)`;
+  });
+
+  roster.style.height=(Math.max(1,visible.length)*ROW_H)+"px";
+  // "live now": people active in the last hour
+  const liveNow=activeList.filter(p=>(Date.now()-p.last)<36e5).length;
+  document.getElementById("s-people").textContent=liveNow;
+}
+setInterval(renderRoster,1000);
+
+// the floor is driven by the live stream: when an event is animated, its author
+// rises to the top of the roster and flashes. "active" tracks who the wall is
+// currently featuring (the looping stream), exactly as the prototype's roster did.
+function featurePerson(login,repo,kind){
+  const p=getPerson(login);
+  p.last=Date.now();p.seq=++_seq;p.repo=repo;p.kind=kind;
+  p.el.classList.remove("flash");void p.el.offsetWidth;p.el.classList.add("flash");
+  setTimeout(()=>p.el.classList.remove("flash"),1200);
+  renderRoster();
+}
+
+// each poll just registers contributor nodes (for hero beams) and the headcount
+// denominator; the roster itself is animated by the event stream above.
+function applyContributors(list){
+  list.forEach(c=>ensureNode("dev:"+c.login,"dev"));
+  const ofEl=document.querySelector(".people-count .of");
+  if(ofEl)ofEl.textContent=" / "+list.length;
+}
+
+/* ---------- contribution heatmap (90-day density strip) ---------- */
+const heat=document.getElementById("heat");
+const HEAT_LEVELS=["#16241c","#1f5238","#2f8a52","#3ddc84"];
+let heatCellByDate={};          // date -> cell element
+let heatKey="";                 // current day set, to detect a day rollover
+
+function heatColor(count,max){
+  if(count<=0)return "var(--panel2)";
+  return HEAT_LEVELS[Math.min(3,Math.floor(count/max*3.999))];
+}
+// ambient shimmer intensity for a day (0..1), sqrt-scaled so even moderately
+// busy days glimmer a little; empty days get 0 (stay dark).
+function heatGlow(count,max){return count>0?Math.min(1,Math.sqrt(count/max)):0;}
+function applyHeatmap(days){
+  // days: [{date,count}] oldest->newest. Render 7-row week columns. Rebuild only
+  // when the day set changes (a new day rolled over); otherwise refresh colors in
+  // place so live cell pulses are not interrupted by the 5s poll.
+  const max=days.reduce((m,d)=>Math.max(m,d.count),0)||1;
+  const key=days.length+"|"+days[0]?.date+"|"+days[days.length-1]?.date;
+  if(key!==heatKey){
+    heat.innerHTML="";heatCellByDate={};
+    for(let i=0;i<days.length;i+=7){
+      const col=document.createElement("div");col.className="heat-week";
+      days.slice(i,i+7).forEach(d=>{
+        const c=document.createElement("div");c.className="heat-cell";
+        c.style.background=heatColor(d.count,max);
+        c.style.setProperty("--glow",heatGlow(d.count,max).toFixed(3));
+        c.style.setProperty("--shimmer-dur",(3+Math.random()*3).toFixed(2)+"s");
+        c.style.setProperty("--shimmer-delay",(Math.random()*4).toFixed(2)+"s");
+        col.appendChild(c);heatCellByDate[d.date]=c;
+      });
+      heat.appendChild(col);
+    }
+    heatKey=key;
+  }else{
+    days.forEach(d=>{const c=heatCellByDate[d.date];if(!c)return;
+      c.style.background=heatColor(d.count,max);
+      c.style.setProperty("--glow",heatGlow(d.count,max).toFixed(3));});
+  }
+}
+// Each real event makes its own day bloom in the density strip. Tied to the live
+// stream (not a mechanical cursor), so the cells that pulse are exactly the days
+// where work is actually happening.
+function dayOf(epochSec){return new Date((epochSec||0)*1000).toISOString().slice(0,10);}
+function pulseHeatDay(date){
+  const c=heatCellByDate[date];
+  if(!c)return;
+  c.classList.remove("hit");void c.offsetWidth;c.classList.add("hit");
+}
+
+/* ---------- where the work lands: live tally of events per repo ---------- */
+const bars=document.getElementById("bars");
+const repoCounts={};                       // repo -> running event count
+const barColors=["var(--ember)","var(--flux)","var(--fused)","var(--grid-green)","var(--mute)"];
+const barRows={};                          // repo -> {row, fill, val}
+
+function renderBars(){
+  const top=Object.entries(repoCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const max=top.length?top[0][1]:1;
+  top.forEach(([repo,count],i)=>{
+    let r=barRows[repo];
+    if(!r){
+      const row=document.createElement("div");row.className="bar-row";
+      row.innerHTML=`<span class="lbl">${repo}</span>
+        <span class="bar-track"><span class="bar-fill"></span></span>
+        <span class="val">0</span>`;
+      bars.appendChild(row);
+      r=barRows[repo]={row,fill:row.querySelector(".bar-fill"),val:row.querySelector(".val")};
+    }
+    r.fill.style.width=Math.round(count/max*100)+"%";
+    r.fill.style.background=barColors[i];
+    r.fill.style.setProperty("--sheen-delay",(i*0.5)+"s");  // stagger the sheen across bars
+    r.val.textContent=count.toLocaleString();
+    r.row.style.order=i;
+    r.row.style.opacity="1";
+  });
+  Object.entries(barRows).forEach(([repo,r])=>{
+    if(!top.find(t=>t[0]===repo)){r.row.style.opacity="0";r.row.style.order=99;}
+  });
+}
+bars.style.display="flex";bars.style.flexDirection="column";
+
+// a real event on this repo flashes its bar (if it is in the current top 5)
+function pulseBar(repo){
+  const r=barRows[repo];
+  if(!r)return;
+  r.fill.classList.remove("pulse");void r.fill.offsetWidth;r.fill.classList.add("pulse");
+}
+
+// authoritative repo counts from /api/repos/top each poll
+function applyRepos(list){
+  list.forEach(({repo,count})=>{ensureNode("repo:"+repo,"repo");repoCounts[repo]=count;});
+  renderBars();
+}
+
+/* ============================================================
+   HERO: spiral constellation (verbatim from the prototype). Glowing
+   star-nodes on a multi-layer starfield; repos = warm anchor stars,
+   contributors = cooler stars on a 2-arm spiral with a soft core.
+   Every event fires a bright beam contributor -> repo. Named nodes are
+   registered from the API (ensureNode); filler stars give density.
+   firePulse(dev,repo,color) is the public interface.
+   ============================================================ */
+const cv=document.getElementById("constellation");
+const ctx=cv.getContext("2d");
+let W,H,DPR,CX,CY;
+
+const nodes=[];const nodeBy={};const links=[];
+let stars=[];
+let dust=[];
+let spin=0;
+const SPIRAL_TOTAL=480;        // nominal total for spiral spread
+const GALAXY_SPREAD=0.72;      // fraction of the panel's short side used as max radius
+let _spiralIdx=0;
+
+function makeNodeAt(id,type,idx,total){
+  const arm=idx%2, tt=(idx/total)%1;
+  const ang=tt*Math.PI*3.6 + arm*Math.PI + (Math.random()-0.5)*0.5;
+  const rad=(0.10+0.9*Math.sqrt(tt))*Math.min(W,H)*GALAXY_SPREAD;
+  const jitter=(Math.random()-0.5)*30;
+  const n={id,type,
+    ang, rad0:rad+jitter,
+    wob:Math.random()*6.28, wobSp:0.3+Math.random()*0.7,
+    orbit:0.8+Math.random()*0.5,
+    r: type==="repo" ? (3+Math.random()*2.4) : (1.2+Math.random()*1.3),
+    hue: type==="repo" ? 30 : 205,
+    base: type==="repo" ? 0.6 : 0.34,
+    tw: Math.random()*6.28, x:0, y:0, heat:0};
+  nodes.push(n);if(id)nodeBy[id]=n;return n;
+}
+function ensureNode(id,type){
+  if(nodeBy[id])return nodeBy[id];
+  return makeNodeAt(id,type,_spiralIdx++,Math.max(_spiralIdx,SPIRAL_TOTAL));
+}
+let ready=false;
+function initNodes(){
+  if(ready)return;
+  // dense filler stars (not addressable; pure visual). Named nodes are added
+  // on demand via ensureNode as the API reports repos/contributors.
+  const filler=420;
+  for(let i=0;i<filler;i++)makeNodeAt("f"+i,"dev",i,SPIRAL_TOTAL);
+  _spiralIdx=filler;
+  // starfield: three depth layers
+  stars=[];const base=Math.round((W*H)/1500);
+  for(let i=0;i<base;i++)stars.push({x:Math.random()*W,y:Math.random()*H,
+    z:Math.random(),tw:Math.random()*6.28,sp:0.2+Math.random()*0.9});
+  dust=[];for(let i=0;i<160;i++)dust.push({a:Math.random()*6.28,
+    r:Math.random()*Math.min(W,H)*GALAXY_SPREAD,dr:0.1+Math.random()*0.3,sz:0.6+Math.random()*1.6});
+  ready=true;
+}
+function resize(){
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  W=cv.clientWidth||800;H=cv.clientHeight||600;CX=W/2;CY=H/2;
+  cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);
+  if(!ready)initNodes();
+}
+resize();new ResizeObserver(resize).observe(cv);
+
+// a few collaboration filaments once some named nodes exist
+function linkSome(){
+  const devs=nodes.filter(n=>n.id&&n.id.startsWith("dev:"));
+  const repos=nodes.filter(n=>n.id&&n.id.startsWith("repo:"));
+  if(!devs.length||!repos.length)return;
+  links.length=0;
+  devs.forEach(d=>{const k=1+Math.floor(Math.random()*2);
+    for(let i=0;i<k;i++)links.push([d,repos[Math.floor(Math.random()*repos.length)]]);});
+}
+
+const beams=[];
+function firePulse(dev,repo,color){
+  const a=ensureNode("dev:"+dev,"dev"),b=ensureNode("repo:"+repo,"repo");
+  if(!a||!b)return;
+  beams.push({a,b,t:0,color:color&&color[0]==="#"?color:"#ffffff",trail:[]});
+  a.heat=1;b.heat=1.5;
+}
+function rgba(hex,al){const n=parseInt(hex.slice(1),16);return `rgba(${n>>16&255},${n>>8&255},${n&255},${al})`;}
+
+let tilt=0.6;
+function place(n,t){
+  const maxR=Math.min(W,H)*GALAXY_SPREAD, frac=Math.min(1,n.rad0/maxR);
+  const a=n.ang + (spin*(1.1-frac*0.2))*n.orbit;
+  const wobAmp=5+frac*20;
+  const rad=n.rad0*(1+Math.sin(t*0.0004)*0.03) + Math.sin(t*0.001*n.wobSp+n.wob)*wobAmp;
+  n.x=CX+Math.cos(a)*rad; n.y=CY+Math.sin(a)*rad*tilt;
+}
+function physics(t){spin+=0.0008;tilt=0.56+Math.sin(t*0.00018)*0.09;
+  for(const n of nodes){place(n,t);n.heat*=0.955;}}
+
+function draw(t){
+  ctx.fillStyle="rgba(7,11,18,0.30)";ctx.fillRect(0,0,W,H);
+  const core=ctx.createRadialGradient(CX,CY,0,CX,CY,Math.min(W,H)*0.72);
+  core.addColorStop(0,"rgba(110,86,170,0.20)");
+  core.addColorStop(0.4,"rgba(50,46,110,0.07)");
+  core.addColorStop(1,"rgba(0,0,0,0)");
+  ctx.fillStyle=core;ctx.fillRect(0,0,W,H);
+
+  ctx.globalCompositeOperation="lighter";
+
+  for(let i=0;i<stars.length;i++){const s=stars[i];
+    const dx=s.x-CX,dy=s.y-CY,sw=0.00007*(0.3+s.z);
+    s.x=CX+dx*Math.cos(sw)-dy*Math.sin(sw);s.y=CY+dx*Math.sin(sw)+dy*Math.cos(sw);
+    const twk=0.5+0.5*Math.sin(t*0.001*s.sp+s.tw),a=(0.12+0.55*s.z)*twk;
+    ctx.fillStyle=`rgba(${200+s.z*55|0},${212+s.z*43|0},255,${a})`;
+    ctx.beginPath();ctx.arc(s.x,s.y,0.4+s.z*1.3,0,6.2832);ctx.fill();
+  }
+  for(const d of dust){d.a+=d.dr*0.002;
+    const x=CX+Math.cos(d.a)*d.r,y=CY+Math.sin(d.a)*d.r*tilt;
+    ctx.fillStyle="rgba(150,170,220,0.05)";ctx.beginPath();ctx.arc(x,y,d.sz,0,6.2832);ctx.fill();}
+
+  ctx.lineWidth=0.6;
+  for(let i=0;i<links.length;i++){const a=links[i][0],b=links[i][1];if(!a||!b)continue;
+    const heat=Math.max(a.heat,b.heat);
+    ctx.strokeStyle=`rgba(120,150,210,${0.02+heat*0.22})`;
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}
+
+  for(let i=0;i<nodes.length;i++){const n=nodes[i];
+    const twk=0.85+0.15*Math.sin(t*0.002+n.tw);
+    const bright=Math.min(1.7,n.base*twk+n.heat);
+    const hue=n.heat>0.05?28:n.hue, sat=n.heat>0.05?95:(n.type==="repo"?72:38);
+    const R=n.r*(1+n.heat*1.5), bloom=R*(5+n.heat*9);
+    const g=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,bloom);
+    g.addColorStop(0,`hsla(${hue},${sat}%,76%,${0.5*bright})`);
+    g.addColorStop(0.25,`hsla(${hue},${sat}%,60%,${0.16*bright})`);
+    g.addColorStop(1,"hsla(0,0%,0%,0)");
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(n.x,n.y,bloom,0,6.2832);ctx.fill();
+    ctx.fillStyle=`hsla(${hue},${sat}%,${85+n.heat*10}%,${Math.min(1,0.85*bright)})`;
+    ctx.beginPath();ctx.arc(n.x,n.y,R,0,6.2832);ctx.fill();
+    if(n.heat>0.25){const len=R*(3+n.heat*5);
+      ctx.strokeStyle=`hsla(${hue},95%,80%,${0.5*n.heat})`;ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(n.x-len,n.y);ctx.lineTo(n.x+len,n.y);
+      ctx.moveTo(n.x,n.y-len);ctx.lineTo(n.x,n.y+len);ctx.stroke();}
+  }
+
+  for(let i=beams.length-1;i>=0;i--){const p=beams[i];p.t+=0.02;
+    if(p.t>=1){beams.splice(i,1);continue;}
+    const e=p.t<0.5?2*p.t*p.t:1-Math.pow(-2*p.t+2,2)/2;
+    const x=p.a.x+(p.b.x-p.a.x)*e,y=p.a.y+(p.b.y-p.a.y)*e;
+    p.trail.push({x,y});if(p.trail.length>16)p.trail.shift();
+    for(let j=0;j<p.trail.length;j++){const tp=p.trail[j];
+      ctx.globalAlpha=(j/p.trail.length)*0.75;ctx.fillStyle=p.color;
+      ctx.beginPath();ctx.arc(tp.x,tp.y,1.6*(j/p.trail.length)+0.4,0,6.2832);ctx.fill();}
+    ctx.globalAlpha=1;
+    const hg=ctx.createRadialGradient(x,y,0,x,y,11);
+    hg.addColorStop(0,p.color);hg.addColorStop(1,"rgba(0,0,0,0)");
+    ctx.fillStyle=hg;ctx.beginPath();ctx.arc(x,y,11,0,6.2832);ctx.fill();
+    ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(x,y,1.8,0,6.2832);ctx.fill();
+  }
+  ctx.globalCompositeOperation="source-over";
+}
+
+function loop(t){if(ready&&nodes.length){physics(t||0);draw(t||0);}if(window.__wall)window.__wall.frames++;requestAnimationFrame(loop);}
+// test/diagnostic hook: lets the Playwright smoke test inspect internal state
+// (rAF frame count, node coords) without touching the rendering logic.
+window.__wall={frames:0,nodes:()=>nodes,beamCount:()=>beams.length,people:()=>people,
+  evCount:()=>evCount,poolLen:()=>pool.length,vbFrames:()=>_vbFrames,vbBeats:()=>_vbBeats};
+loop();
+
+/* ============================================================
+   EVENT TICKER: a continuous animator over a rolling pool of recent
+   events. The poll loop appends genuinely-new events to the end of the
+   pool; the ticker walks the pool firing beams + roster pings + feed
+   rows, and LOOPS back to the start when it reaches the end so the wall
+   never falls flat between server refreshes. Real activity (sparse, a
+   few events every couple of minutes) is replayed as ambient motion;
+   when fresh events arrive they are played next so live work surfaces.
+   ============================================================ */
+const feed=document.getElementById("feed");
+let evCount=0,windowStart=Date.now();
+const seen=new Set();
+const pool=[];                 // rolling recent events, oldest-first
+const POOL_CAP=300;
+let cursor=0;                  // ring index of the next event to animate
+
+function fmtTs(epochSec){
+  return new Date((epochSec||0)*1000).toISOString().replace("T"," ").slice(5,19);
+}
+function evKey(e){return e.kind+"|"+e.dev+"|"+e.repo+"|"+e.ts+"|"+(e.message||"");}
+
+function feedRow(e){
+  const tagText=e.kind==="commit"?"PushEvent":e.kind==="opened"?"PullRequest opened":"PullRequest merged";
+  const row=document.createElement("div");
+  row.className="ev "+e.kind;
+  row.innerHTML=`<span class="ts">${fmtTs(e.ts)}</span> · <span class="tag">${tagText}</span><br>
+    <span class="who">${e.dev}</span> <span class="repo">→ net2grid/${e.repo}</span>
+    ${e.kind==="commit"&&e.message?`<span class="msg">"${e.message}"</span>`:""}`;
+  return row;
+}
+
+function animateEvent(e){
+  firePulse(e.dev,e.repo,PALETTE[e.kind]);   // hero beam contributor -> repo
+  featurePerson(e.dev,e.repo,e.kind);        // rise + flash on the floor
+  pulseBar(e.repo);                          // flash this repo's bar
+  pulseHeatDay(dayOf(e.ts));                 // bloom this event's day in the density strip
+  voicePulse(e.kind);                        // pump the org-pulse voicebox
+  feed.prepend(feedRow(e));
+  while(feed.children.length>24)feed.lastChild.remove();
+  evCount++;
+}
+
+// merge a freshly polled batch (newest-first) into the pool. New events are
+// appended to the end and queued to play next so live work shows up promptly.
+function mergeEvents(events){
+  const fresh=[];
+  for(const e of events){const k=evKey(e);if(!seen.has(k)){seen.add(k);fresh.push(e);}}
+  if(!fresh.length)return;
+  fresh.reverse();                           // oldest-first
+  const at=pool.length;
+  pool.push(...fresh);
+  cursor=at;                                 // play the new arrivals next
+  if(pool.length>POOL_CAP){                  // trim, keeping the cursor aligned
+    const drop=pool.length-POOL_CAP;
+    pool.splice(0,drop);
+    cursor=Math.max(0,cursor-drop);
+  }
+}
+
+// continuous, bursty animator. Loops the pool so the viz stays alive.
+function tick(){
+  if(pool.length){
+    if(cursor>=pool.length)cursor=0;         // reached the end -> loop
+    animateEvent(pool[cursor]);
+    cursor++;
+  }
+  setTimeout(tick, 260+Math.random()*900);
+}
+tick();
+
+// rate readout (animation cadence, as in the prototype) -> stream + org pulse
+setInterval(()=>{
+  const mins=(Date.now()-windowStart)/60000;
+  const txt=(evCount/Math.max(mins,.05)).toFixed(0)+" /min";
+  document.getElementById("stream-rate").textContent=txt;
+  const pr=document.getElementById("pulse-rate");if(pr)pr.textContent=txt;
+},2000);
+
+/* ---------- poll loop: occasionally check + append new data ---------- */
+const POLL_MS=5000;
+async function getJSON(url){
+  const r=await fetch(url,{headers:{"Accept":"application/json"}});
+  if(r.status===401){location.href="/login";throw new Error("auth");}
+  if(!r.ok)throw new Error(url+" "+r.status);
+  return r.json();
+}
+async function poll(){
+  try{
+    const [s,contributors,repos,heatDays,events]=await Promise.all([
+      getJSON("/api/stats"),
+      getJSON("/api/contributors/active"),
+      getJSON("/api/repos/top?limit=5"),
+      getJSON("/api/heatmap"),
+      getJSON("/api/events/recent?limit=80"),
+    ]);
+    applyStats(s);
+    applyContributors(contributors);
+    applyRepos(repos);
+    applyHeatmap(heatDays);
+    if(!links.length)linkSome();
+    mergeEvents(events);
+  }catch(err){if(err&&err.message!=="auth")console.warn("poll failed:",err);}
+  setTimeout(poll,POLL_MS);
+}
+poll();
+
+</script>
+</body>
+</html>
