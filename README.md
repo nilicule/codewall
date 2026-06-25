@@ -17,8 +17,8 @@ zero infrastructure.
 
 ```bash
 uv sync
-DEV_AUTH_BYPASS=1 uv run flask --app app run --port 8000
-# open http://127.0.0.1:8000
+DEV_AUTH_BYPASS=1 uv run flask --app app run --port 5008
+# open http://127.0.0.1:5008
 ```
 
 `DEV_AUTH_BYPASS=1` skips OAuth and treats every request as an org member. It is
@@ -77,12 +77,12 @@ SECRET_KEY=...                       # from step 3
 
 ```bash
 uv sync
-uv run flask --app app run --port 8000      # dev server
+uv run flask --app app run --port 5008      # dev server
 # or, for production (single worker, see below):
-uv run gunicorn -w 1 --threads 8 -b 0.0.0.0:8000 app:app
+uv run gunicorn -w 1 --threads 8 -b 0.0.0.0:5008 app:app
 ```
 
-Open http://127.0.0.1:8000 and enter the access key once. The first full harvest
+Open http://127.0.0.1:5008 and enter the access key once. The first full harvest
 scans the whole window and can take a couple of minutes across hundreds of repos;
 the dashboard shows zeros until it completes, then refreshes incrementally every
 `REFRESH_SECONDS`. Serve behind HTTPS in production.
@@ -134,6 +134,7 @@ line out, or run with `N2G_SKIP_DOTENV=1` and an empty `GITHUB_TOKEN`.
 | `OAUTH_CLIENT_SECRET` | (empty) | GitHub OAuth app client secret. |
 | `DEV_AUTH_BYPASS` | `0` | `1` = skip the viewer gate entirely. Local only, insecure. |
 | `CACHE_PERSIST_PATH` | (empty) | Path to a SQLite file. Empty = pure in-memory. |
+| `URL_PREFIX` | (empty) | Sub-path mount when behind a proxy (e.g. `/codewall`). |
 | `N2G_SKIP_DOTENV` | (empty) | `1` = ignore `.env` (used by tests to force mock). |
 
 ## How the cache and background refresh work
@@ -182,7 +183,7 @@ not websockets, keeps this single-container and simple.
 The state is in memory, so the app MUST run as ONE process. Run a single worker:
 
 ```bash
-gunicorn -w 1 --threads 8 -b 0.0.0.0:8000 app:app
+gunicorn -w 1 --threads 8 -b 0.0.0.0:5008 app:app
 ```
 
 Do NOT run multiple Gunicorn workers. Each worker would get its own copy of the
@@ -228,23 +229,46 @@ declares `/app/data` as a volume, so mount one to keep the snapshot across
 container recreations:
 
 ```bash
-docker run -p 8000:8000 --env-file .env -v n2g-cache:/app/data net2grid-wall
+docker run -p 5008:5008 --env-file .env -v n2g-cache:/app/data net2grid-wall
 ```
 
 Persistence is also skipped in mock mode, and a path that cannot be opened (for
 example an unwritable absolute path like `/data/...` on your laptop) disables
 persistence with a warning rather than crashing the app.
 
+## Behind a reverse proxy (sub-path)
+
+To serve the wall under a sub-path (for example `https://host/codewall/`), set
+`URL_PREFIX=/codewall`. The app then mounts there: `url_for`, redirects and the
+login URL emit `/codewall/...`, and the frontend prefixes all of its API/login
+URLs with it (injected as `BASE`). It also honours `X-Forwarded-Proto/Host` so
+external URLs use the right scheme and host.
+
+`URL_PREFIX` works whether nginx strips the prefix or forwards it intact:
+
+```nginx
+location /codewall/ {
+    proxy_pass         http://app:5008/;   # trailing slash: nginx strips /codewall
+    proxy_set_header   Host              $host;
+    proxy_set_header   X-Forwarded-Proto $scheme;
+    proxy_set_header   X-Forwarded-Host  $host;
+    proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+}
+```
+
+Run the container with `-e URL_PREFIX=/codewall`. Served at the domain root,
+leave `URL_PREFIX` empty and nothing changes.
+
 ## Docker
 
 ```bash
-docker build -t net2grid-wall .
-docker run -p 8000:8000 \
+docker build --network=host -t codewall .
+docker run -p 5008:5008 --network host \
   -e GITHUB_TOKEN=... -e GITHUB_ORG=NET2GRID \
   -e ACCESS_TOKEN=... -e SECRET_KEY=... \
   net2grid-wall
 # or pass your filled-in .env directly:
-docker run -p 8000:8000 --env-file .env net2grid-wall
+docker run -p 5008:5008 --network host --env-file .env codewall
 ```
 
 The image runs exactly one Gunicorn worker with eight threads (see above).

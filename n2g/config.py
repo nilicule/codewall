@@ -35,6 +35,10 @@ class Config:
         # In mock mode we tick fast so the wall feels alive without GitHub.
         self.mock_refresh_seconds = _int("MOCK_REFRESH_SECONDS", 3)
 
+        # Mount path when served behind a reverse proxy under a sub-path
+        # (e.g. URL_PREFIX=/codewall). Empty = served at the domain root.
+        self.url_prefix = os.environ.get("URL_PREFIX", "").strip().rstrip("/")
+
         # Auth / session
         self.secret_key = os.environ.get("SECRET_KEY", "").strip() or "dev-insecure-change-me"
         # Simple shared-secret gate: one access key, entered once via a login

@@ -4,12 +4,36 @@ from __future__ import annotations
 import logging
 import os
 
-from flask import Flask, render_template, session
+from flask import Flask, render_template, request, session
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from . import api, auth
 from .config import Config, load_config
 from .harvester import Harvester
 from .snapshot import Store
+
+
+class _PrefixMiddleware:
+    """Mount the app under a sub-path (URL_PREFIX) behind a reverse proxy.
+
+    Sets SCRIPT_NAME so url_for / redirects emit prefixed URLs, and strips the
+    prefix from PATH_INFO when the proxy forwards the full path. This works
+    whether nginx strips the prefix (proxy_pass with a trailing slash) or
+    forwards it intact.
+    """
+
+    def __init__(self, app, prefix: str) -> None:
+        self.app = app
+        self.prefix = prefix
+
+    def __call__(self, environ, start_response):
+        environ["SCRIPT_NAME"] = self.prefix
+        path = environ.get("PATH_INFO", "")
+        if path == self.prefix:
+            environ["PATH_INFO"] = "/"
+        elif path.startswith(self.prefix + "/"):
+            environ["PATH_INFO"] = path[len(self.prefix):]
+        return self.app(environ, start_response)
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO"),
@@ -24,6 +48,12 @@ def create_app(config: Config | None = None) -> Flask:
     app.secret_key = config.secret_key
     app.config["N2G"] = config
 
+    # Honour proxy headers (X-Forwarded-Proto/Host) so external URLs use the
+    # right scheme/host, and mount under URL_PREFIX when behind a sub-path.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
+    if config.url_prefix:
+        app.wsgi_app = _PrefixMiddleware(app.wsgi_app, config.url_prefix)
+
     store = Store()
     app.config["N2G_STORE"] = store
 
@@ -36,7 +66,13 @@ def create_app(config: Config | None = None) -> Flask:
     @app.get("/")
     @auth.login_required
     def dashboard():
-        return render_template("dashboard.html", user=session.get("user"))
+        # base_path is the proxy mount point (e.g. /codewall); the frontend
+        # prefixes all of its API/login URLs with it.
+        return render_template(
+            "dashboard.html",
+            user=session.get("user"),
+            base_path=request.script_root,
+        )
 
     @app.get("/healthz")
     def healthz():

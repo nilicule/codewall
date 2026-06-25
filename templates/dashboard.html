@@ -350,6 +350,9 @@
    ============================================================ */
 const PALETTE = {commit:"#ff8a3d",opened:"#36d6e7",merged:"#a98bff"};
 const KIND_VERB = {commit:"pushing to",opened:"opened PR in",merged:"merged into"};
+// Proxy mount point (e.g. "/codewall" behind nginx, "" at the root). All API
+// and login URLs are built relative to it so the app works under a sub-path.
+const BASE = "{{ base_path }}";
 
 /* ---------- ORG PULSE: ECG heartbeat + totals caption ---------- */
 // The window totals live in a compact caption; the panel's hero is an ECG trace
@@ -877,8 +880,8 @@ setInterval(()=>{
 /* ---------- poll loop: occasionally check + append new data ---------- */
 const POLL_MS=5000;
 async function getJSON(url){
-  const r=await fetch(url,{headers:{"Accept":"application/json"}});
-  if(r.status===401){location.href="/login";throw new Error("auth");}
+  const r=await fetch(BASE+url,{headers:{"Accept":"application/json"}});
+  if(r.status===401){location.href=BASE+"/login";throw new Error("auth");}
   if(!r.ok)throw new Error(url+" "+r.status);
   return r.json();
 }
