@@ -116,18 +116,31 @@ def test_url_prefix_makes_redirects_and_base_path_prefixed():
 
 
 def _start_google_login(client):
-    """GET /login to obtain the server-stored CSRF state, asserting the
+    """GET /login/google to obtain the server-stored CSRF state, asserting the
     redirect targets Google. Returns the state to replay on /callback."""
-    resp = client.get("/login")
+    resp = client.get("/login/google")
     assert resp.status_code == 302
     assert "accounts.google.com" in resp.headers["Location"]
     with client.session_transaction() as sess:
         return sess["oauth_state"]
 
 
-def test_google_login_redirects_to_google_with_hd_hint():
+def test_google_login_page_shows_button_and_og_tags():
+    # /login is now a branded HTML card (not an instant redirect), so link
+    # unfurls get OG tags and users get a real landing page.
     client = _app(google=True).test_client()
     resp = client.get("/login")
+    assert resp.status_code == 200
+    body = resp.data
+    assert b"Continue with Google" in body          # the sign-in button
+    assert b"/login/google" in body                 # button links to the flow
+    assert b'property="og:image"' in body           # OG preview restored
+    assert b"net2grid.com" in body                  # domain-restriction hint
+
+
+def test_google_start_redirects_to_google_with_hd_hint():
+    client = _app(google=True).test_client()
+    resp = client.get("/login/google")
     assert resp.status_code == 302
     loc = resp.headers["Location"]
     assert loc.startswith("https://accounts.google.com/o/oauth2/v2/auth?")
