@@ -1,0 +1,3 @@
+# Keeps the static/ directory tracked by git so it exists in every checkout and
+# in the Docker build context (COPY static ./static). The app has no static
+# assets today; drop favicons, logos, etc. here if you add any.
