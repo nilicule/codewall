@@ -78,6 +78,16 @@
   }
   .panel-pad{padding:18px 20px}
 
+  /* first-load entrance: panels rise + fade in, cascading out from the hero */
+  @keyframes panel-in{from{opacity:0;transform:translateY(16px) scale(.99)}to{opacity:1;transform:none}}
+  .panel{animation:panel-in .6s cubic-bezier(.2,.7,.2,1) both}
+  .hero{animation-delay:.05s}
+  .stream{animation-delay:.16s}
+  .left>.panel:nth-child(1){animation-delay:.12s}
+  .left>.panel:nth-child(2){animation-delay:.22s}
+  .bottom>.panel:nth-child(1){animation-delay:.26s}
+  .bottom>.panel:nth-child(2){animation-delay:.32s}
+
   .eyebrow{
     font-family:var(--font-mono);
     font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;
