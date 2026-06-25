@@ -32,4 +32,4 @@ EXPOSE 5008
 
 # ONE worker, multiple threads. Do NOT scale workers: each worker would get its
 # own in-memory cache and its own harvester. Scale with a CDN in front instead.
-CMD ["gunicorn", "-w", "1", "--threads", "8", "-b", "0.0.0.0:8000", "app:app"]
+CMD ["gunicorn", "-w", "1", "--threads", "8", "-b", "0.0.0.0:5008", "app:app"]
