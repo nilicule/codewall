@@ -28,7 +28,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
 RUN mkdir -p /app/data
 VOLUME ["/app/data"]
 
-EXPOSE 8000
+EXPOSE 5008
 
 # ONE worker, multiple threads. Do NOT scale workers: each worker would get its
 # own in-memory cache and its own harvester. Scale with a CDN in front instead.
