@@ -44,8 +44,14 @@ class Config:
         # Simple shared-secret gate: one access key, entered once via a login
         # form, grants a signed-cookie session. No GitHub OAuth app required.
         self.access_token = os.environ.get("ACCESS_TOKEN", "").strip()
-        self.oauth_client_id = os.environ.get("OAUTH_CLIENT_ID", "").strip()
-        self.oauth_client_secret = os.environ.get("OAUTH_CLIENT_SECRET", "").strip()
+        # Google Workspace viewer gate (per-user identity + hosted-domain check).
+        self.google_client_id = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
+        self.google_client_secret = os.environ.get("GOOGLE_CLIENT_SECRET", "").strip()
+        # Only accounts in this Google Workspace hosted domain may sign in.
+        # Empty/unset falls back to the default; compared case-insensitively.
+        self.allowed_email_domain = (
+            os.environ.get("ALLOWED_EMAIL_DOMAIN", "").strip() or "net2grid.com"
+        ).lower()
         self.dev_auth_bypass = _bool("DEV_AUTH_BYPASS", False)
 
         # Optional single-file persistence (empty = pure in-memory)
@@ -57,8 +63,8 @@ class Config:
         return not self.github_token
 
     @property
-    def oauth_configured(self) -> bool:
-        return bool(self.oauth_client_id and self.oauth_client_secret)
+    def google_oauth_configured(self) -> bool:
+        return bool(self.google_client_id and self.google_client_secret)
 
 
 def load_config() -> Config:
