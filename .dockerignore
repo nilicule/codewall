@@ -9,3 +9,4 @@ _old/dashboard.html
 .env
 *.sqlite
 *.db
+data/

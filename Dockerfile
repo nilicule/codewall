@@ -20,6 +20,14 @@ ENV PATH="/app/.venv/bin:$PATH" \
     WINDOW_DAYS=90 \
     REFRESH_SECONDS=120
 
+# Cache directory for optional SQLite persistence. A relative
+# CACHE_PERSIST_PATH=data/snapshot.sqlite resolves here (WORKDIR /app); mount a
+# volume at /app/data to keep the snapshot across container recreations. The
+# same relative value also works in local dev, where it resolves under the
+# project directory.
+RUN mkdir -p /app/data
+VOLUME ["/app/data"]
+
 EXPOSE 8000
 
 # ONE worker, multiple threads. Do NOT scale workers: each worker would get its

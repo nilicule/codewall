@@ -210,11 +210,30 @@ assets are public.
 ## Optional persistence
 
 By default the cache is pure in-memory and a restart triggers a cold
-re-harvest. Set `CACHE_PERSIST_PATH=/data/snapshot.sqlite` to persist the
-snapshot across restarts. This is one local SQLite file (stdlib `sqlite3`, no
-server, no ORM): a single table holding one JSON blob of the raw window, read
-once on boot and written after each refresh. It does not violate the
-"no external services" rule.
+re-harvest. Set `CACHE_PERSIST_PATH` to persist the snapshot across restarts.
+This is one local SQLite file (stdlib `sqlite3`, no server, no ORM): a single
+table holding one JSON blob of the raw window, read once on boot and written
+after each refresh. It does not violate the "no external services" rule.
+
+Use a **relative** path so the same value works in both environments:
+
+```ini
+CACHE_PERSIST_PATH=data/snapshot.sqlite
+```
+
+The parent directory is created automatically. In local dev it resolves under
+the project directory (`./data/snapshot.sqlite`, gitignored). In the container
+it resolves under `WORKDIR /app` (`/app/data/snapshot.sqlite`); the image
+declares `/app/data` as a volume, so mount one to keep the snapshot across
+container recreations:
+
+```bash
+docker run -p 8000:8000 --env-file .env -v n2g-cache:/app/data net2grid-wall
+```
+
+Persistence is also skipped in mock mode, and a path that cannot be opened (for
+example an unwritable absolute path like `/data/...` on your laptop) disables
+persistence with a warning rather than crashing the app.
 
 ## Docker
 
