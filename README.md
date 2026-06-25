@@ -112,6 +112,39 @@ read) and is never sent to the client; with the shared-secret gate it needs no
 `read:org` scope. You can also drop app auth entirely and put the container behind
 an identity-aware proxy or private network (Cloudflare Access, Tailscale, VPN).
 
+### Setting up Google Workspace login
+
+One-time setup in the [Google Cloud Console](https://console.cloud.google.com/),
+signed in with a `net2grid.com` account:
+
+1. **Project** — create (or reuse) a project, e.g. `codewall-auth`, and make sure
+   it is selected.
+2. **OAuth consent screen** (APIs & Services → OAuth consent screen) — set
+   **User type: Internal**. This restricts sign-in to `net2grid.com` Workspace
+   accounts and skips Google's app-verification process. Fill in the app name and
+   support/developer emails. The `openid`, `email`, and `profile` scopes are basic
+   and need not be added explicitly.
+3. **Credentials** (APIs & Services → Credentials) → **Create Credentials → OAuth
+   client ID** → **Application type: Web application**. Under **Authorized redirect
+   URIs**, add the callback URL — it must match exactly what the app builds,
+   `<scheme>://<host><URL_PREFIX>/callback`:
+   - root: `https://your-host.example.com/callback`
+   - sub-path (`URL_PREFIX=/codewall`): `https://your-host.example.com/codewall/callback`
+   - local: `http://localhost:5008/callback`
+
+   Add every host you use (prod + localhost). The match is exact — scheme, host,
+   and path all count, with no trailing slash.
+4. **Copy the Client ID and Client secret** into the environment as
+   `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (plus a strong `SECRET_KEY`, and
+   optionally `ALLOWED_EMAIL_DOMAIN` if not `net2grid.com`). Leave `ACCESS_TOKEN`
+   and `DEV_AUTH_BYPASS` unset — they outrank the Google gate.
+
+Viewers then land on a `/login` card with a **Continue with Google** button. The
+`redirect_uri` is derived from the `X-Forwarded-Proto`/`X-Forwarded-Host` headers
+(via `ProxyFix`), so a reverse proxy must set those correctly or Google returns
+`redirect_uri_mismatch`. No additional Google APIs need enabling — sign-in uses the
+default OpenID Connect endpoints.
+
 ## Configuration
 
 All configuration is via environment variables (see `.env.example`). A `.env`
