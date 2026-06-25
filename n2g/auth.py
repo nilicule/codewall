@@ -111,6 +111,7 @@ def login():
 LOGIN_HTML = """<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NET2GRID · Activity</title>
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
 <style>
   :root{--void:#070b12;--panel:#0d141e;--hairline:#243446;--ink:#eaf2ff;
     --mute:#5d7088;--grid-green:#3ddc84}

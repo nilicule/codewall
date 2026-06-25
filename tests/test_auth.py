@@ -54,6 +54,17 @@ def test_dev_bypass_opens_everything():
     assert client.get("/api/stats").status_code == 200
 
 
+def test_favicon_served_and_referenced():
+    client = _app(access_token="s3cret").test_client()
+    fav = client.get("/static/favicon.svg")
+    assert fav.status_code == 200
+    assert "svg" in fav.headers["Content-Type"]
+    # both the login page and the dashboard link to it
+    assert b"favicon.svg" in client.get("/login").data
+    client.post("/login", data={"token": "s3cret"})
+    assert b"favicon.svg" in client.get("/").data
+
+
 def test_url_prefix_makes_redirects_and_base_path_prefixed():
     client = _app(access_token="s3cret", url_prefix="/codewall").test_client()
     # unauthenticated dashboard at the mounted path redirects to the prefixed login
