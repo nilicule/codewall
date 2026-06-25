@@ -56,7 +56,7 @@ one:
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-(Prefer per-user GitHub login instead? See "Gating who can view" below.)
+(Prefer per-user Google Workspace login instead? See "Gating who can view" below.)
 
 **3. Session signing key.**
 
@@ -96,12 +96,13 @@ order:
 
 1. **Shared secret (simplest).** Set `ACCESS_TOKEN` to a long random string.
    Viewers open `/login`, enter the key once, and get a signed-cookie session. No
-   GitHub OAuth app, no per-user identity: anyone with the key can view. Good for
+   OAuth app, no per-user identity: anyone with the key can view. Good for
    an internal wall, especially behind HTTPS.
-2. **GitHub OAuth.** Set `OAUTH_CLIENT_ID` / `OAUTH_CLIENT_SECRET` (OAuth app with
-   callback `https://<your-host>/callback`). GitHub login -> verify the user is an
-   active member of `GITHUB_ORG` (using the user's `read:org` token) -> session.
-   Per-user identity and automatic member-only enforcement.
+2. **Google Workspace OAuth.** Set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`
+   (OAuth client with callback `https://<your-host>/callback`). Google login ->
+   the signed `id_token` is verified and the account must be a verified member of
+   `ALLOWED_EMAIL_DOMAIN` (default `net2grid.com`) -> session. Per-user identity
+   and automatic domain-only enforcement.
 3. **`DEV_AUTH_BYPASS=1`.** Skips auth entirely for local dev. Insecure; never in
    production.
 
@@ -130,8 +131,9 @@ line out, or run with `N2G_SKIP_DOTENV=1` and an empty `GITHUB_TOKEN`.
 | `MOCK_REFRESH_SECONDS` | `3` | Tick interval in mock mode. |
 | `SECRET_KEY` | dev value | Signs the session cookie. Set a strong value in prod. |
 | `ACCESS_TOKEN` | (empty) | Shared access key for the simple viewer gate. |
-| `OAUTH_CLIENT_ID` | (empty) | GitHub OAuth app client id (alternative gate). |
-| `OAUTH_CLIENT_SECRET` | (empty) | GitHub OAuth app client secret. |
+| `GOOGLE_CLIENT_ID` | (empty) | Google OAuth client id (Workspace viewer gate). |
+| `GOOGLE_CLIENT_SECRET` | (empty) | Google OAuth client secret. |
+| `ALLOWED_EMAIL_DOMAIN` | `net2grid.com` | Workspace domain allowed to sign in. |
 | `DEV_AUTH_BYPASS` | `0` | `1` = skip the viewer gate entirely. Local only, insecure. |
 | `CACHE_PERSIST_PATH` | (empty) | Path to a SQLite file. Empty = pure in-memory. |
 | `URL_PREFIX` | (empty) | Sub-path mount when behind a proxy (e.g. `/codewall`). |
@@ -295,7 +297,7 @@ n2g/
   github.py         GraphQL v4 incremental harvester
   mockdata.py       mock source used when no token is set
   harvester.py      background refresh thread
-  auth.py           viewer gate: shared access key or GitHub OAuth
+  auth.py           viewer gate: shared access key or Google Workspace OAuth
   api.py            JSON API blueprint
   persist.py        optional single-file SQLite persistence
 templates/dashboard.html   the prototype, wired to the API
