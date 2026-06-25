@@ -151,10 +151,17 @@
     color:var(--void);position:relative;
     transition:box-shadow .4s,transform .4s;
   }
+  /* GitHub photo overlays the initials badge; on load-error it's removed,
+     revealing the gradient + initials fallback underneath. */
+  .person .pic .avatar{
+    position:absolute;inset:0;width:100%;height:100%;
+    border-radius:50%;object-fit:cover;z-index:0;
+    background:inherit;
+  }
   /* expanding ring drawn inside the avatar's own box (no outside bleed to clip) */
   .person .pic .ping{
     position:absolute;inset:0;border-radius:50%;
-    border:1.5px solid var(--ink);opacity:0;
+    border:1.5px solid var(--ink);opacity:0;z-index:2;
     transform-origin:center;pointer-events:none;
   }
   .person.flash .pic{transform:scale(1.1)}
@@ -467,18 +474,24 @@ let _seq=0;
 function getPerson(login){
   let p=pBy[login];
   if(p)return p;
-  p={name:login, last:0, seq:0, repo:null, kind:null, el:null};
+  p={name:login, last:0, realTs:0, seq:0, repo:null, kind:null, el:null};
   const el=document.createElement("div");el.className="person idle";
   const hue=hueFor(login);
+  // GitHub serves a public avatar at github.com/<login>.png for any real login.
+  // It loads over the initials badge; if it 404s (mock data, dev-bypass) the
+  // <img> removes itself and the gradient + initials show through.
+  const av=encodeURIComponent(login);
   el.innerHTML=`
     <div class="pic" style="background:radial-gradient(circle at 35% 30%,hsl(${hue} 85% 72%),hsl(${hue} 70% 50%))">
       <span class="ping"></span>${initials(login)}
+      <img class="avatar" alt="" loading="lazy" src="https://github.com/${av}.png?size=80">
     </div>
     <div class="body">
       <span class="name">${login}</span>
       <span class="focus"><span class="verb"></span><span class="repo-chip"></span></span>
     </div>
     <span class="when"></span>`;
+  el.querySelector(".avatar").onerror=function(){this.remove();};
   p.el=el;
   p.verbEl=el.querySelector(".verb");
   p.chipEl=el.querySelector(".repo-chip");
@@ -515,7 +528,8 @@ function renderRoster(){
       p.chipEl.textContent=p.repo;
       p.chipEl.className="repo-chip k-"+p.kind;
     }
-    p.whenEl.textContent=ago(p.last);
+    // real recency from the event's own timestamp, not the animation clock
+    p.whenEl.textContent=p.realTs?ago(p.realTs*1000):"";
   });
 
   const parkY=(visible.length+1)*ROW_H;
@@ -537,9 +551,11 @@ setInterval(renderRoster,1000);
 // the floor is driven by the live stream: when an event is animated, its author
 // rises to the top of the roster and flashes. "active" tracks who the wall is
 // currently featuring (the looping stream), exactly as the prototype's roster did.
-function featurePerson(login,repo,kind){
+function featurePerson(login,repo,kind,ts){
   const p=getPerson(login);
-  p.last=Date.now();p.seq=++_seq;p.repo=repo;p.kind=kind;
+  // p.last drives roster ordering (animation cadence, keeps the floor lively);
+  // p.realTs is the event's true time, shown as the honest recency readout.
+  p.last=Date.now();p.realTs=ts||p.realTs;p.seq=++_seq;p.repo=repo;p.kind=kind;
   p.el.classList.remove("flash");void p.el.offsetWidth;p.el.classList.add("flash");
   setTimeout(()=>p.el.classList.remove("flash"),1200);
   renderRoster();
@@ -843,7 +859,7 @@ function feedRow(e){
 
 function animateEvent(e){
   firePulse(e.dev,e.repo,PALETTE[e.kind]);   // hero beam contributor -> repo
-  featurePerson(e.dev,e.repo,e.kind);        // rise + flash on the floor
+  featurePerson(e.dev,e.repo,e.kind,e.ts);   // rise + flash on the floor
   pulseBar(e.repo);                          // flash this repo's bar
   pulseHeatDay(dayOf(e.ts));                 // bloom this event's day in the density strip
   voicePulse(e.kind);                        // pump the org-pulse voicebox
