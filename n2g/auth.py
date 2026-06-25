@@ -6,7 +6,7 @@ Three gates, in precedence order, all ending in a Flask signed-cookie session
 1. DEV_AUTH_BYPASS=1  -> fake session, no login. Local dev only; logged as insecure.
 2. ACCESS_TOKEN set   -> one shared secret entered via a login form. No OAuth
    app needed. Anyone with the secret can view (no per-user identity).
-3. Google OAuth     -> Google Workspace login + ALLOWED_EMAIL_DOMAIN check (per-user).
+3. Google OAuth      -> Google Workspace login + ALLOWED_EMAIL_DOMAIN check (per-user).
 
 If none are configured the app stays locked (login returns 503).
 """
@@ -198,7 +198,7 @@ def callback():
 
     id_token_str = _exchange_code(cfg, code)
     if not id_token_str:
-        return "Could not obtain access token.", 502
+        return "Could not obtain id token.", 502
 
     claims = _verify_id_token(cfg, id_token_str)
     if not claims:
@@ -266,8 +266,8 @@ def _verify_id_token(cfg, id_token_str: str) -> dict | None:
             google_requests.Request(),
             cfg.google_client_id,
         )
-    except ValueError:
-        log.info("id_token verification failed")
+    except ValueError as e:
+        log.info("id_token verification failed: %s", e)
         return None
 
 
