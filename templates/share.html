@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NET2GRID · Org Activity Wall</title>
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+
+<!-- Open Graph / Twitter: the link-unfurl card shown by Slack, Discord,
+     Twitter, LinkedIn, iMessage, etc. Served to crawlers regardless of the
+     auth gate, so the preview works even though the wall itself is gated. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="NET2GRID">
+<meta property="og:title" content="Org Activity Wall">
+<meta property="og:description" content="A live constellation of every commit and pull request across the org — streaming in real time over a 90-day window.">
+<meta property="og:image" content="{{ og_image }}">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="2400">
+<meta property="og:image:height" content="1260">
+<meta property="og:image:alt" content="NET2GRID Org Activity Wall">
+<meta property="og:url" content="{{ og_url }}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Org Activity Wall">
+<meta name="twitter:description" content="A live constellation of every commit and pull request across the org — streaming in real time over a 90-day window.">
+<meta name="twitter:image" content="{{ og_image }}">
+<meta name="theme-color" content="#070b12">
+
+<style>
+  :root{--void:#070b12;--panel:#0d141e;--hairline:#243446;--ink:#eaf2ff;
+    --mute:#5d7088;--grid-green:#3ddc84}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{min-height:100vh;display:flex;align-items:center;justify-content:center;
+    background:var(--void);color:var(--ink);text-align:center;padding:40px;
+    font-family:"Inter",system-ui,sans-serif}
+  .card{max-width:520px}
+  .eyebrow{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11px;
+    letter-spacing:.22em;text-transform:uppercase;color:var(--mute)}
+  h1{font-size:34px;font-weight:600;letter-spacing:.02em;margin:10px 0 14px;text-transform:uppercase}
+  p{color:#aebbd0;font-size:15px;line-height:1.55;margin-bottom:26px}
+  a{display:inline-block;padding:12px 22px;border-radius:8px;text-decoration:none;
+    background:var(--grid-green);color:#06210f;font-weight:600;font-size:14px}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="eyebrow">NET2GRID</div>
+    <h1>Org Activity Wall</h1>
+    <p>A live constellation of every commit and pull request across the org — streaming in real time over a 90-day window.</p>
+    <a href="{{ og_url }}">Open the wall →</a>
+  </div>
+</body>
+</html>

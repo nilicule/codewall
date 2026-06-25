@@ -23,6 +23,7 @@ from flask import (
     Blueprint,
     current_app,
     redirect,
+    render_template,
     render_template_string,
     request,
     session,
@@ -60,6 +61,16 @@ def login_required(view):
         if "user" not in session:
             if _wants_json():
                 return {"error": "auth_required"}, 401
+            if _is_link_crawler():
+                # Link-unfurl bots can't log in: serve a public Open Graph card
+                # so Slack/Discord/etc. get a preview without exposing the wall.
+                # Works for every auth gate (the login route may redirect to
+                # GitHub for OAuth, where a crawler would never see our tags).
+                return render_template(
+                    "share.html",
+                    og_image=url_for("static", filename="og-image.png", _external=True),
+                    og_url=url_for("dashboard", _external=True),
+                )
             return redirect(url_for("auth.login"))
         return view(*args, **kwargs)
 
@@ -68,6 +79,21 @@ def login_required(view):
 
 def _wants_json() -> bool:
     return request.path.startswith("/api/")
+
+
+# User-Agent substrings for the major link-preview crawlers. Matched
+# case-insensitively; deliberately broad so new bots fall through to the card.
+_CRAWLER_UAS = (
+    "slackbot", "twitterbot", "facebookexternalhit", "linkedinbot",
+    "discordbot", "whatsapp", "telegrambot", "skypeuripreview",
+    "embedly", "pinterest", "redditbot", "bingbot", "googlebot",
+    "applebot", "ia_archiver", "vkshare", "mastodon", "bluesky",
+)
+
+
+def _is_link_crawler() -> bool:
+    ua = (request.headers.get("User-Agent") or "").lower()
+    return any(bot in ua for bot in _CRAWLER_UAS)
 
 
 @bp.route("/login", methods=["GET", "POST"])
@@ -87,7 +113,12 @@ def login():
                 return redirect(url_for("dashboard"))
             error = "Incorrect access key."
             log.info("access-key login failed")
-        return render_template_string(LOGIN_HTML, error=error), (401 if error else 200)
+        return render_template_string(
+            LOGIN_HTML,
+            error=error,
+            og_image=url_for("static", filename="og-image.png", _external=True),
+            og_url=url_for("dashboard", _external=True),
+        ), (401 if error else 200)
 
     # GitHub OAuth gate.
     if cfg.oauth_configured:
@@ -112,6 +143,17 @@ LOGIN_HTML = """<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NET2GRID · Activity</title>
 <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="NET2GRID">
+<meta property="og:title" content="Org Activity Wall">
+<meta property="og:description" content="A live constellation of every commit and pull request across the org — streaming in real time over a 90-day window.">
+<meta property="og:image" content="{{ og_image }}">
+<meta property="og:image:width" content="2400">
+<meta property="og:image:height" content="1260">
+<meta property="og:url" content="{{ og_url }}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="{{ og_image }}">
+<meta name="theme-color" content="#070b12">
 <style>
   :root{--void:#070b12;--panel:#0d141e;--hairline:#243446;--ink:#eaf2ff;
     --mute:#5d7088;--grid-green:#3ddc84}

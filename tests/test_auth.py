@@ -65,6 +65,40 @@ def test_favicon_served_and_referenced():
     assert b"favicon.svg" in client.get("/").data
 
 
+SLACKBOT_UA = "Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)"
+
+
+def test_link_crawler_gets_public_og_card_not_login_redirect():
+    client = _app(access_token="s3cret").test_client()
+    # a normal anonymous browser is redirected to login (no preview content)
+    assert client.get("/").status_code == 302
+    # a link-unfurl bot gets a 200 share card with Open Graph tags, no auth
+    resp = client.get("/", headers={"User-Agent": SLACKBOT_UA})
+    assert resp.status_code == 200
+    body = resp.data
+    assert b'property="og:image"' in body
+    assert b'twitter:card' in body
+    assert b"og-image.png" in body
+
+
+def test_og_image_served_publicly():
+    client = _app(access_token="s3cret").test_client()
+    img = client.get("/static/og-image.png")
+    assert img.status_code == 200                               # no auth gate on static
+    assert img.headers["Content-Type"] == "image/png"
+
+
+def test_og_image_url_is_absolute_and_prefixed_under_proxy():
+    client = _app(access_token="s3cret", url_prefix="/codewall").test_client()
+    resp = client.get(
+        "/codewall/",
+        headers={"User-Agent": SLACKBOT_UA, "X-Forwarded-Proto": "https"},
+        base_url="https://n2g.dev/",
+    )
+    # og:image must be an absolute https URL including the proxy sub-path
+    assert b'content="https://n2g.dev/codewall/static/og-image.png"' in resp.data
+
+
 def test_url_prefix_makes_redirects_and_base_path_prefixed():
     client = _app(access_token="s3cret", url_prefix="/codewall").test_client()
     # unauthenticated dashboard at the mounted path redirects to the prefixed login
