@@ -1,19 +1,21 @@
 """Auth gate tests (shared-secret access key) using the Flask test client."""
 from __future__ import annotations
 
-from n2g import create_app
+from n2g import auth, create_app
 from n2g.config import Config
 
 
-def _app(access_token="", dev_bypass=False, oauth=False, url_prefix=""):
+def _app(access_token="", dev_bypass=False, google=False,
+         allowed_domain="net2grid.com", url_prefix=""):
     c = Config()
     c.github_token = ""  # mock data source, no live calls
     c.cache_persist_path = ""
     c.secret_key = "test"
     c.access_token = access_token
     c.dev_auth_bypass = dev_bypass
-    c.oauth_client_id = "x" if oauth else ""
-    c.oauth_client_secret = "x" if oauth else ""
+    c.google_client_id = "gid" if google else ""
+    c.google_client_secret = "gsecret" if google else ""
+    c.allowed_email_domain = allowed_domain
     c.url_prefix = url_prefix
     return create_app(c)
 
@@ -111,3 +113,67 @@ def test_url_prefix_makes_redirects_and_base_path_prefixed():
     assert client.post("/codewall/login", data={"token": "s3cret"}).status_code == 302
     page = client.get("/codewall/")
     assert b'const BASE = "/codewall"' in page.data
+
+
+def _start_google_login(client):
+    """GET /login to obtain the server-stored CSRF state, asserting the
+    redirect targets Google. Returns the state to replay on /callback."""
+    resp = client.get("/login")
+    assert resp.status_code == 302
+    assert "accounts.google.com" in resp.headers["Location"]
+    with client.session_transaction() as sess:
+        return sess["oauth_state"]
+
+
+def test_google_login_redirects_to_google_with_hd_hint():
+    client = _app(google=True).test_client()
+    resp = client.get("/login")
+    assert resp.status_code == 302
+    loc = resp.headers["Location"]
+    assert loc.startswith("https://accounts.google.com/o/oauth2/v2/auth?")
+    assert "hd=net2grid.com" in loc
+    assert "scope=openid+email+profile" in loc
+
+
+def test_google_workspace_user_granted(monkeypatch):
+    client = _app(google=True).test_client()
+    state = _start_google_login(client)
+    monkeypatch.setattr(auth, "_exchange_code", lambda cfg, code: "fake-id-token")
+    monkeypatch.setattr(auth, "_verify_id_token", lambda cfg, tok: {
+        "email": "ada@net2grid.com", "email_verified": True,
+        "hd": "net2grid.com", "name": "Ada Lovelace",
+        "picture": "https://example.com/a.png",
+    })
+    resp = client.get(f"/callback?state={state}&code=abc")
+    assert resp.status_code == 302                              # -> dashboard
+    assert client.get("/api/stats").status_code == 200          # session granted
+
+
+def test_google_wrong_domain_rejected(monkeypatch):
+    client = _app(google=True).test_client()
+    state = _start_google_login(client)
+    monkeypatch.setattr(auth, "_exchange_code", lambda cfg, code: "tok")
+    monkeypatch.setattr(auth, "_verify_id_token", lambda cfg, tok: {
+        "email": "mallory@gmail.com", "email_verified": True, "hd": "gmail.com",
+    })
+    resp = client.get(f"/callback?state={state}&code=abc")
+    assert resp.status_code == 403
+    assert client.get("/api/stats").status_code == 401          # still gated
+
+
+def test_google_unverified_email_rejected(monkeypatch):
+    client = _app(google=True).test_client()
+    state = _start_google_login(client)
+    monkeypatch.setattr(auth, "_exchange_code", lambda cfg, code: "tok")
+    monkeypatch.setattr(auth, "_verify_id_token", lambda cfg, tok: {
+        "email": "ada@net2grid.com", "email_verified": False, "hd": "net2grid.com",
+    })
+    resp = client.get(f"/callback?state={state}&code=abc")
+    assert resp.status_code == 403
+
+
+def test_google_callback_rejects_bad_state(monkeypatch):
+    client = _app(google=True).test_client()
+    _start_google_login(client)
+    resp = client.get("/callback?state=forged&code=abc")
+    assert resp.status_code == 400
